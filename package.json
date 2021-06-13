@@ -1,0 +1,37 @@
+{
+  "name": "google-notify",
+  "version": "1.0.0",
+  "description": "text notification to google home or google cast",
+  "main": "google-notify.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orcema/google-notify.git"
+  },
+  "keywords": [
+    "google",
+    "cast",
+    "local",
+    "mediaserver",
+    "level",
+    "volume",
+    "notify"
+  ],
+  "author": "Orcé MARINKOVSKI",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "3.5.1",
+    "castv2-client": "^1.2.0",
+    "google-tts-api": "latest",
+    "ip": "^1.1.5",
+    "network": "latest",
+    "protobufjs": ">=5.0.3",
+    "request": "2.88.0"
+  }
+  "bugs": {
+    "url": "https://github.com/orcema/google-notify/issues"
+  },
+  "homepage": "https://github.com/orcema/google-notify#readme"
+}
