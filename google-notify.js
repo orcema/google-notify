@@ -7,13 +7,13 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 
-function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
 
   const emitter = this;
   const deviceDetails = {
     "ip": deviceIp,
     "language": language,
-    "textSpeed": textSpeed,
+    "speakSlow": speakSlow,
     "mediaServerIp": mediaServerIp,
     "mediaServerPortInUse": mediaServerPort,
     "cacheFolderInUse": cacheFolder,
@@ -83,7 +83,7 @@ function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerP
         reject("missing cache folder");
       }
       const cleanedMessage = deviceDetails.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
-      deviceDetails.mediaFileName = cleanedMessage + "-" + deviceDetails.language + "-" + (deviceDetails.textSpeed != 1 ? "slow" : "normal") + ".mp3";
+      deviceDetails.mediaFileName = cleanedMessage + "-" + deviceDetails.language + "-" + (deviceDetails.speakSlow ? "slow" : "normal") + ".mp3";
       let fileToCheckInCache = path.join(deviceDetails.cacheFolderInUse, deviceDetails.mediaFileName);
       deviceDetails.url = "http://" + deviceDetails.mediaServerIp + ":" + deviceDetails.mediaServerPortInUse + "/" + deviceDetails.mediaFileName;
       console.log('media url: '+deviceDetails.url);
@@ -91,12 +91,11 @@ function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerP
         resolve(deviceDetails);
 
       } else {
-        // Googletts(text, language, textSpeed).then(function (url) {
         Download_Mp3(
           deviceDetails.playMessage,
           deviceDetails.language,
           deviceDetails.mediaFileName,
-          (deviceDetails.textSpeed != 1 ? true : false),
+          deviceDetails.speakSlow,
           deviceDetails.cacheFolderInUse)
           .then(_ =>
             resolve(deviceDetails))
@@ -116,20 +115,19 @@ function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerP
     });
   };
 
-  function Download_Mp3(text, language, fileNameWithSpeedAndLanguage, playSlow, cacheFolder, callback) {
+  function Download_Mp3(text, language, fileNameWithSpeedAndLanguage, speakSlow, cacheFolder) {
 
     var dstFilePath = path.join(
       createFolderIfNotExist(cacheFolder), fileNameWithSpeedAndLanguage);
     // get base64 text
     return Googletts
-      .getAudioBase64(text, { lang: language, slow: playSlow })
+      .getAudioBase64(text, { lang: language, slow: speakSlow })
       .then((base64) => {
         // console.log({ base64 });
 
         // save the audio file
         const buffer = Buffer.from(base64, 'base64');
         fs.writeFileSync(dstFilePath, buffer, { encoding: 'base64' });
-        callback();
       })
   }
 
@@ -241,8 +239,8 @@ function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerP
     });
   }
 
-  this.setSpeechSpeed = function (textSpeed) {
-    deviceDetails.textSpeed = textSpeed;
+  this.setSpeechSpeed = function (speakSlow) {
+    deviceDetails.speakSlow = speakSlow;
     return this;
   }
 
@@ -255,12 +253,9 @@ function GoogleNotify(deviceIp, language, textSpeed, mediaServerIp, mediaServerP
 
 GoogleNotify.prototype.__proto__ = EventEmitter.prototype // inherit from EventEmitter
 
-module.exports = function (deviceip, language, speed, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+module.exports = function (deviceip, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
   if (deviceip && language) {
-    if (!speed) {
-      speed = 1
-    };
-    return new GoogleNotify(deviceip, language, speed, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel);
+    return new GoogleNotify(deviceip, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel);
   }
 }
 
