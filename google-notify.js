@@ -249,6 +249,11 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerP
     return this;
   }
 
+  this.setLanguage = function (lang) {
+    deviceDetails.language = lang;
+    return this;
+  }
+
 };
 
 GoogleNotify.prototype.__proto__ = EventEmitter.prototype // inherit from EventEmitter
