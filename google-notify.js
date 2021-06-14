@@ -7,14 +7,14 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 
-function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
 
   const emitter = this;
   const deviceDetails = {
     "ip": deviceIp,
     "language": language,
     "speakSlow": speakSlow,
-    "mediaServerIp": mediaServerIp,
+    "mediaServerIp": mediaServerUrl,
     "mediaServerPortInUse": mediaServerPort,
     "cacheFolderInUse": cacheFolder,
     "playVolumeLevel": defaultVolumeLevel
@@ -85,8 +85,10 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerP
       const cleanedMessage = deviceDetails.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
       deviceDetails.mediaFileName = cleanedMessage + "-" + deviceDetails.language + "-" + (deviceDetails.speakSlow ? "slow" : "normal") + ".mp3";
       let fileToCheckInCache = path.join(deviceDetails.cacheFolderInUse, deviceDetails.mediaFileName);
-      deviceDetails.url = "http://" + deviceDetails.mediaServerIp + ":" + deviceDetails.mediaServerPortInUse + "/" + deviceDetails.mediaFileName;
-      console.log('media url: '+deviceDetails.url);
+      deviceDetails.url = deviceDetails.mediaServerIp
+        + ":" + deviceDetails.mediaServerPortInUse
+        + "/" + deviceDetails.mediaFileName;
+      console.log('media url: ' + deviceDetails.url);
       if (fs.existsSync(fileToCheckInCache)) {
         resolve(deviceDetails);
 
@@ -99,10 +101,10 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerP
           deviceDetails.cacheFolderInUse)
           .then(_ =>
             resolve(deviceDetails))
-          .catch(e =>
-            { console.error(e);
-              reject('failed to create the voice message');
-            })
+          .catch(e => {
+            console.error(e);
+            reject('failed to create the voice message');
+          })
           ;
       }
     });
@@ -131,8 +133,8 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerP
       })
   }
 
-  function createFolderIfNotExist(folderToAssert){
-    if(!fs.existsSync(folderToAssert)){
+  function createFolderIfNotExist(folderToAssert) {
+    if (!fs.existsSync(folderToAssert)) {
       fs.mkdirSync(folderToAssert);
     }
     return folderToAssert;
@@ -214,7 +216,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerIp, mediaServerP
         autoplay: true
       }, function (err, status) {
         if (err) {
-          console.error('media ' +deviceDetails.url+ ' not available',  err);
+          console.error('media ' + deviceDetails.url + ' not available', err);
           reject("failed to load media, check media server in config");
         }
       });
