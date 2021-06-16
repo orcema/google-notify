@@ -7,25 +7,40 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 
-function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
 
+function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+  var notificationsPipeLine = [];
+  var isPlayingNotifiation = false;
   const emitter = this;
-  const deviceDetails = {
+  const deviceDefaultSettings = {
+    "msg": {"payload":""},
     "ip": deviceIp,
     "language": language,
     "speakSlow": speakSlow,
-    "mediaServerIp": mediaServerUrl,
-    "mediaServerPortInUse": mediaServerPort,
-    "cacheFolderInUse": cacheFolder,
+    "mediaServerUrl": mediaServerUrl,
+    "mediaServerPort": mediaServerPort,
+    "cacheFolder": cacheFolder,
     "playVolumeLevel": defaultVolumeLevel
   };
+  const devicePlaySettings={};
+
   setupDeviceCommunicationAdapter();
 
-  this.notify = function (message) {
-    deviceDetails.playMessage = message;
-    return getSpeechUrl(deviceDetails)
-      .then(deviceDetails =>
-        playOnDevice(deviceDetails));
+  this.notify = function (msg) {
+    devicePlaySettings.language = (msg.hasOwnProperty('language')?msg.hasOwnProperty('language'):deviceDefaultSettings.language);
+    devicePlaySettings.speakSlow = (msg.hasOwnProperty('speakSlow')?msg.hasOwnProperty('speakSlow'):deviceDefaultSettings.speakSlow);
+    devicePlaySettings.mediaServerUrl = (msg.hasOwnProperty('mediaServerUrl')?msg.hasOwnProperty('mediaServerUrl'):deviceDefaultSettings.mediaServerUrl);
+    devicePlaySettings.mediaServerPort = (msg.hasOwnProperty('mediaServerPort')?msg.hasOwnProperty('mediaServerPort'):deviceDefaultSettings.mediaServerPort);
+    devicePlaySettings.cacheFolder = (msg.hasOwnProperty('cacheFolder')?msg.hasOwnProperty('cacheFolder'):deviceDefaultSettings.cacheFolder);
+    devicePlaySettings.playVolumeLevel = (msg.hasOwnProperty('playVolumeLevel')?msg.hasOwnProperty('playVolumeLevel'):deviceDefaultSettings.playVolumeLevel);
+    devicePlaySettings.mediaServerUrl = (msg.hasOwnProperty('mediaServerUrl')?msg.hasOwnProperty('mediaServerUrl'):deviceDefaultSettings.mediaServerUrl);
+    devicePlaySettings.msg = msg;
+    devicePlaySettings.playMessage = msg.payload;
+    devicePlaySettings.ip = deviceDefaultSettings.ip;
+
+    return getSpeechUrl(devicePlaySettings)
+      .then(devicePlaySettings =>
+        playOnDevice(devicePlaySettings));
   };
 
   this.play = function (mp3_url, callback) {
@@ -34,73 +49,93 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     });
   };
 
-  function playOnDevice(deviceDetails) {
+  function playOnDevice(devicePlaySettings) {
     return setupDeviceCommunicationAdapter()
-      .then(deviceDetails =>
-        setupSocket(deviceDetails))
+      .then(devicePlaySettings =>
+        setupSocket(devicePlaySettings))
 
-      .then(deviceDetails =>
-        connectWithDevice(deviceDetails, deviceIp))
+      .then(devicePlaySettings =>
+        connectWithDevice(devicePlaySettings, deviceIp))
 
-      .then(deviceDetails =>
-        memoriseCurrentDeviceVolume(deviceDetails))
+      .then(devicePlaySettings =>
+        memoriseCurrentDeviceVolume(devicePlaySettings))
 
-      .then(deviceDetails =>
-        setDeviceVolume(deviceDetails))
+      .then(devicePlaySettings =>
+        setDeviceVolume(devicePlaySettings))
 
-      .then(deviceDetails =>
-        setupPlayer(deviceDetails))
+      .then(devicePlaySettings =>
+        setupPlayer(devicePlaySettings))
 
-      .then(deviceDetails =>
-        playMedia(deviceDetails))
+      .then(devicePlaySettings =>
+        playMedia(devicePlaySettings))
 
-      .then(deviceDetails =>
-        restoreDeviceVolume(deviceDetails))
+      .then(devicePlaySettings =>
+        restoreDeviceVolume(devicePlaySettings))
   };
 
   function setupDeviceCommunicationAdapter() {
     return new Promise((resolve, reject) => {
-      deviceDetails.defaultMediaReceiver = require('castv2-client').DefaultMediaReceiver;
-      deviceDetails.device = new castV2();
+      devicePlaySettings.defaultMediaReceiver = require('castv2-client').DefaultMediaReceiver;
+      devicePlaySettings.device = new castV2();
 
-      deviceDetails.device.on('error', function (err) {
+      devicePlaySettings.device.on('error', function (err) {
         console.log('Error: %s', err.message);
-        deviceDetails.device.close();
+        devicePlaySettings.device.close();
         emitter.emit("error", err);
       });
 
-      deviceDetails.device.on('status', function (status) {
+      devicePlaySettings.device.on('status', function (status) {
         // console.log("status",status);
       });
-      resolve(deviceDetails);
+      resolve(devicePlaySettings);
     });
 
   }
 
-  function getSpeechUrl(deviceDetails) {
+  function getSpeechUrl(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      if (deviceDetails.cacheFolderInUse == undefined) {
+      if(devicePlaySettings.msg.hasOwnProperty('url')){
+        resolve(devicePlaySettings);
+        return;
+      }
+      if (devicePlaySettings.cacheFolder == undefined) {
         reject("missing cache folder");
       }
-      const cleanedMessage = deviceDetails.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
-      deviceDetails.mediaFileName = cleanedMessage + "-" + deviceDetails.language + "-" + (deviceDetails.speakSlow ? "slow" : "normal") + ".mp3";
-      let fileToCheckInCache = path.join(deviceDetails.cacheFolderInUse, deviceDetails.mediaFileName);
-      deviceDetails.url = deviceDetails.mediaServerIp
-        + ":" + deviceDetails.mediaServerPortInUse
-        + "/" + deviceDetails.mediaFileName;
-      console.log('media url: ' + deviceDetails.url);
+      if (devicePlaySettings.msg.hasOwnProperty('mediaFileName')){
+        devicePlaySettings.mediaPlayUrl = devicePlaySettings.mediaServerUrl
+        + (devicePlaySettings.mediaServerPort?":" + devicePlaySettings.mediaServerPort:'')
+        + "/" + devicePlaySettings.mediaFileName;
+        resolve('devicePlaySettings');
+        return;
+      }
+      if (devicePlaySettings.msg.hasOwnProperty('mediaUrl')){
+        devicePlaySettings.mediaPlayUrl = devicePlaySettings.msg.mediaUrl;
+        resolve('devicePlaySettings');
+        return;
+      }
+
+      const cleanedMessage = devicePlaySettings.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
+      devicePlaySettings.mediaFileName = cleanedMessage + "-" 
+        + devicePlaySettings.language + "-" 
+        + (devicePlaySettings.speakSlow ? "slow" : "normal") 
+        + ".mp3";
+      let fileToCheckInCache = path.join(devicePlaySettings.cacheFolder, devicePlaySettings.mediaFileName);
+      devicePlaySettings.mediaPlayUrl = devicePlaySettings.mediaServerUrl
+        + ":" + devicePlaySettings.mediaServerPort
+        + "/" + devicePlaySettings.mediaFileName;
+      
       if (fs.existsSync(fileToCheckInCache)) {
-        resolve(deviceDetails);
+        resolve(devicePlaySettings);
 
       } else {
         Download_Mp3(
-          deviceDetails.playMessage,
-          deviceDetails.language,
-          deviceDetails.mediaFileName,
-          deviceDetails.speakSlow,
-          deviceDetails.cacheFolderInUse)
+          devicePlaySettings.playMessage,
+          devicePlaySettings.language,
+          devicePlaySettings.mediaFileName,
+          devicePlaySettings.speakSlow,
+          devicePlaySettings.cacheFolder)
           .then(_ =>
-            resolve(deviceDetails))
+            resolve(devicePlaySettings))
           .catch(e => {
             console.error(e);
             reject('failed to create the voice message');
@@ -140,99 +175,114 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     return folderToAssert;
   }
 
-  function setupSocket(deviceDetails) {
+  function setupSocket(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      deviceDetails.clienttcp = new net.Socket();
-      deviceDetails.clienttcp.on('error', function (error) {
+      devicePlaySettings.clienttcp = new net.Socket();
+      devicePlaySettings.clienttcp.on('error', function (error) {
         reject('ERROR: Device not reachable');
       });
-      deviceDetails.clienttcp.connect(8009, deviceDetails.ip, () => {
-        resolve(deviceDetails);
+      devicePlaySettings.clienttcp.connect(8009, devicePlaySettings.ip, () => {
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function connectWithDevice(deviceDetails, deviceIp) {
+  function connectWithDevice(devicePlaySettings, deviceIp) {
     return new Promise((resolve, reject) => {
-      deviceDetails.device.connect(deviceIp, () => {
-        resolve(deviceDetails);
+      devicePlaySettings.device.connect(deviceIp, () => {
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function memoriseCurrentDeviceVolume(deviceDetails) {
+  function memoriseCurrentDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      deviceDetails.device.getVolume((err, volume) => {
-        deviceDetails.memoVolume = volume;
-        console.log("inital vol level", volume, "device", deviceDetails.ip);
-        resolve(deviceDetails);
+      devicePlaySettings.device.getVolume((err, volume) => {
+        devicePlaySettings.memoVolume = volume;
+        console.log("inital vol level", volume, "device", devicePlaySettings.ip);
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function restoreDeviceVolume(deviceDetails) {
+  function restoreDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      deviceDetails.device.setVolume({ level: deviceDetails.memoVolume.level }, (err, response) => {
+      devicePlaySettings.device.setVolume({ level: devicePlaySettings.memoVolume.level }, (err, response) => {
         if (err)
           reject(err);
-        console.log("Vol level restored to ", deviceDetails.memoVolume.level, "device ", deviceDetails.ip);
-        deviceDetails.device.disconnect;
-        resolve(deviceDetails);
+        console.log("Vol level restored to ", devicePlaySettings.memoVolume.level, "device ", devicePlaySettings.ip);
+        devicePlaySettings.device.close();
+        devicePlaySettings.defaultMediaReceiver=null;
+        isPlayingNotifiation=false;
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function setDeviceVolume(deviceDetails) {
+  function setDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      deviceDetails.device.setVolume({ level: deviceDetails.playVolumeLevel }, (err, response) => {
+      devicePlaySettings.device.setVolume({ level: devicePlaySettings.playVolumeLevel }, (err, response) => {
         if (err)
           reject(err);
-        console.log("Vol level set to ", deviceDetails.playVolumeLevel, "device ", deviceDetails.ip);
-        resolve(deviceDetails);
+        console.log("Vol level set to ", devicePlaySettings.playVolumeLevel, "device ", devicePlaySettings.ip);
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function setupPlayer(deviceDetails) {
+  function setupPlayer(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      deviceDetails.device.launch(deviceDetails.defaultMediaReceiver, function (err, player) {
+      devicePlaySettings.device.launch(devicePlaySettings.defaultMediaReceiver, function (err, player) {
         if (err)
           reject(error);
-        deviceDetails.player = player;
-        resolve(deviceDetails);
+        devicePlaySettings.player = player;
+        // if(isPlayingNotifiation){
+        //   devicePlaySettings.player.stop((err,status)=>{
+        //     console.log('player status',status);
+        //     resolve(devicePlaySettings);
+        //   })
+        // }else{
+        //   resolve(devicePlaySettings);
+        // }
+        resolve(devicePlaySettings);
       });
     });
   }
 
-  function playMedia(deviceDetails) {
+  function playMedia(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      var media = {
-        contentId: deviceDetails.url,
-        contentType: 'audio/mp3',
-        streamType: 'BUFFERED' // or LIVE
-      };
       let previousPlayerState;
-      deviceDetails.player.load(media, {
+
+      var media = {
+        contentId: devicePlaySettings.mediaPlayUrl,
+        contentType: (devicePlaySettings.msg.contentType?devicePlaySettings.msg.contentType:'audio/mp3'),
+        streamType: (devicePlaySettings.msg.streamType?devicePlaySettings.msg.streamType:'BUFFERED') // or LIVE
+      };
+
+      console.log('mediaPlayUrl: ' + devicePlaySettings.mediaPlayUrl);
+
+      isPlayingNotifiation=true;
+      devicePlaySettings.player.load(media, {
         autoplay: true
       }, function (err, status) {
         if (err) {
-          console.error('media ' + deviceDetails.url + ' not available', err);
+          console.error('media ' + devicePlaySettings.mediaPlayUrl + ' not available', err);
           reject("failed to load media, check media server in config");
         }
       });
 
       emitter.emit("status", 'playing voice message');
-      deviceDetails.player.on('status', function (status) {
+      devicePlaySettings.player.on('status', function (status) {
         var currentPlayerState = status.playerState;
-        console.log('status broadcast currentPlayerState=%s', currentPlayerState, "for host", deviceDetails.ip);
+        console.log('status broadcast currentPlayerState=%s', currentPlayerState, "for host", devicePlaySettings.ip);
 
         if (currentPlayerState === "PAUSED") {
-          resolve(deviceDetails);
+          resolve(devicePlaySettings);
         }
 
         const finishedPlaying = (previousPlayerState === "PLAYING" || previousPlayerState === "BUFFERING") && currentPlayerState === "IDLE";
         if (finishedPlaying) {
-          resolve(deviceDetails);
+          resolve(devicePlaySettings);
         }
 
         previousPlayerState = currentPlayerState;
@@ -241,28 +291,13 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     });
   }
 
-  this.setSpeechSpeed = function (speakSlow) {
-    deviceDetails.speakSlow = speakSlow;
-    return this;
-  }
-
-  this.setEmitVolume = function (playVolumeLevel) {
-    deviceDetails.playVolumeLevel = playVolumeLevel / 100;
-    return this;
-  }
-
-  this.setLanguage = function (lang) {
-    deviceDetails.language = lang;
-    return this;
-  }
-
 };
 
 GoogleNotify.prototype.__proto__ = EventEmitter.prototype // inherit from EventEmitter
 
-module.exports = function (deviceip, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+module.exports = function (deviceip, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
   if (deviceip && language) {
-    return new GoogleNotify(deviceip, language, speakSlow, mediaServerIp, mediaServerPort, cacheFolder, defaultVolumeLevel);
+    return new GoogleNotify(deviceip, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel);
   }
 }
 
