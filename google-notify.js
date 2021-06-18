@@ -27,17 +27,16 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
   setupDeviceCommunicationAdapter();
 
   this.notify = function (msg) {
-    devicePlaySettings.language = (msg.hasOwnProperty('language')?msg.hasOwnProperty('language'):deviceDefaultSettings.language);
-    devicePlaySettings.speakSlow = (msg.hasOwnProperty('speakSlow')?msg.hasOwnProperty('speakSlow'):deviceDefaultSettings.speakSlow);
-    devicePlaySettings.mediaServerUrl = (msg.hasOwnProperty('mediaServerUrl')?msg.hasOwnProperty('mediaServerUrl'):deviceDefaultSettings.mediaServerUrl);
-    devicePlaySettings.mediaServerPort = (msg.hasOwnProperty('mediaServerPort')?msg.hasOwnProperty('mediaServerPort'):deviceDefaultSettings.mediaServerPort);
-    devicePlaySettings.cacheFolder = (msg.hasOwnProperty('cacheFolder')?msg.hasOwnProperty('cacheFolder'):deviceDefaultSettings.cacheFolder);
-    devicePlaySettings.playVolumeLevel = (msg.hasOwnProperty('playVolumeLevel')?msg.hasOwnProperty('playVolumeLevel'):deviceDefaultSettings.playVolumeLevel);
-    devicePlaySettings.mediaServerUrl = (msg.hasOwnProperty('mediaServerUrl')?msg.hasOwnProperty('mediaServerUrl'):deviceDefaultSettings.mediaServerUrl);
     devicePlaySettings.msg = msg;
-    devicePlaySettings.playMessage = msg.payload;
     devicePlaySettings.ip = deviceDefaultSettings.ip;
-
+    devicePlaySettings.playVolumeLevel = (msg.playVolumeLevel!=undefined?msg.playVolumeLevel:deviceDefaultSettings.playVolumeLevel);
+    devicePlaySettings.playVolumeLevel /=100;
+    devicePlaySettings.playMessage = (msg.playMessage!=undefined?msg.playMessage:"");
+    devicePlaySettings.language = (msg.language!=undefined?msg.language:deviceDefaultSettings.language);
+    devicePlaySettings.speakSlow = (msg.speakSlow!=undefined?msg.speakSlow:deviceDefaultSettings.speakSlow);
+    devicePlaySettings.mediaServerUrl = (msg.mediaServerUrl!=undefined?msg.mediaServerUrl:deviceDefaultSettings.mediaServerUrl);
+    devicePlaySettings.mediaServerPort = (msg.mediaServerPort!=undefined?msg.mediaServerPort:deviceDefaultSettings.mediaServerPort);
+    devicePlaySettings.cacheFolder = (msg.cacheFolder!=undefined?msg.cacheFolder:deviceDefaultSettings.cacheFolder);
     return getSpeechUrl(devicePlaySettings)
       .then(devicePlaySettings =>
         playOnDevice(devicePlaySettings));
@@ -108,12 +107,16 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve('devicePlaySettings');
         return;
       }
-      if (devicePlaySettings.msg.hasOwnProperty('mediaUrl')){
+      if (devicePlaySettings.msg.mediaUrl){
         devicePlaySettings.mediaPlayUrl = devicePlaySettings.msg.mediaUrl;
         resolve('devicePlaySettings');
         return;
       }
 
+      if (!devicePlaySettings.playMessage){
+        reject('missing message to play');
+        return;
+      }
       const cleanedMessage = devicePlaySettings.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
       devicePlaySettings.mediaFileName = cleanedMessage + "-" 
         + devicePlaySettings.language + "-" 
@@ -236,14 +239,6 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         if (err)
           reject(error);
         devicePlaySettings.player = player;
-        // if(isPlayingNotifiation){
-        //   devicePlaySettings.player.stop((err,status)=>{
-        //     console.log('player status',status);
-        //     resolve(devicePlaySettings);
-        //   })
-        // }else{
-        //   resolve(devicePlaySettings);
-        // }
         resolve(devicePlaySettings);
       });
     });
