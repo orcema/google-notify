@@ -109,6 +109,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       }
       if (devicePlaySettings.msg.mediaUrl){
         devicePlaySettings.mediaPlayUrl = devicePlaySettings.msg.mediaUrl;
+        devicePlaySettings.mediaType = devicePlaySettings.msg.mediaType;
         resolve('devicePlaySettings');
         return;
       }
@@ -200,6 +201,9 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function memoriseCurrentDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      if(isPlayingNotifiation){
+        resolve(devicePlaySettings); // do not memorize volume because already playing, thus not the device inital volume level setting
+      }
       devicePlaySettings.device.getVolume((err, volume) => {
         devicePlaySettings.memoVolume = volume;
         console.log("inital vol level", volume, "device", devicePlaySettings.ip);
@@ -250,7 +254,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
       var media = {
         contentId: devicePlaySettings.mediaPlayUrl,
-        contentType: (devicePlaySettings.msg.contentType?devicePlaySettings.msg.contentType:'audio/mp3'),
+        contentType: (devicePlaySettings.mediaType?devicePlaySettings.mediaType:'audio/mp3'),
         streamType: (devicePlaySettings.msg.streamType?devicePlaySettings.msg.streamType:'BUFFERED') // or LIVE
       };
 
