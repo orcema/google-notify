@@ -1,6 +1,6 @@
 {
   "name": "google-notify",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "text notification to google home or google cast",
   "main": "google-notify.js",
   "scripts": {

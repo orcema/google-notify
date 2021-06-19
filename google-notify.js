@@ -1,7 +1,6 @@
 'use strict';//
 
 const castV2 = require('castv2-client').Client;
-const EventEmitter = require('events');
 const Googletts = require('google-tts-api');
 const net = require('net');
 const fs = require('fs');
@@ -28,6 +27,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   this.notify = function (msg) {
     devicePlaySettings.msg = msg;
+    devicePlaySettings.sourceNode=msg.sourceNode;
     devicePlaySettings.ip = deviceDefaultSettings.ip;
     devicePlaySettings.playVolumeLevel = (msg.playVolumeLevel!=undefined?msg.playVolumeLevel:deviceDefaultSettings.playVolumeLevel);
     devicePlaySettings.playVolumeLevel /=100;
@@ -42,11 +42,11 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         playOnDevice(devicePlaySettings));
   };
 
-  this.play = function (mp3_url, callback) {
-    getPlayUrl(mp3_url, deviceIp, function (res) {
-      emitter.emit("play", res)
-    });
-  };
+  // this.play = function (mp3_url, callback) {
+  //   getPlayUrl(mp3_url, deviceIp, function (res) {
+  //     emitter.emit("play", res)
+  //   });
+  // };
 
   function playOnDevice(devicePlaySettings) {
     return setupDeviceCommunicationAdapter()
@@ -80,7 +80,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       devicePlaySettings.device.on('error', function (err) {
         console.log('Error: %s', err.message);
         devicePlaySettings.device.close();
-        emitter.emit("error", err);
+        reject('error setup device communication adapter');
       });
 
       devicePlaySettings.device.on('status', function (status) {
@@ -270,7 +270,8 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         }
       });
 
-      emitter.emit("status", 'playing voice message');
+      devicePlaySettings.msg.statusUpdate('playing voice message');
+
       devicePlaySettings.player.on('status', function (status) {
         var currentPlayerState = status.playerState;
         console.log('status broadcast currentPlayerState=%s', currentPlayerState, "for host", devicePlaySettings.ip);
@@ -292,7 +293,6 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
 };
 
-GoogleNotify.prototype.__proto__ = EventEmitter.prototype // inherit from EventEmitter
 
 module.exports = function (deviceip, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
   if (deviceip && language) {
