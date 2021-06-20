@@ -5,6 +5,8 @@ const Googletts = require('google-tts-api');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+var notificationsQueue = [];
+
 
 
 function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
@@ -12,7 +14,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
   var isPlayingNotifiation = false;
   const emitter = this;
   const deviceDefaultSettings = {
-    "msg": {"payload":""},
+    "msg": { "payload": "" },
     "ip": deviceIp,
     "language": language,
     "speakSlow": speakSlow,
@@ -21,26 +23,62 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     "cacheFolder": cacheFolder,
     "playVolumeLevel": defaultVolumeLevel
   };
-  const devicePlaySettings={};
+  const devicePlaySettings = {};
 
   setupDeviceCommunicationAdapter();
 
-  this.notify = function (msg) {
+  this.notify = function (msg, callback) {
     devicePlaySettings.msg = msg;
-    devicePlaySettings.sourceNode=msg.sourceNode;
+    devicePlaySettings.sourceNode = msg.sourceNode;
     devicePlaySettings.ip = deviceDefaultSettings.ip;
-    devicePlaySettings.playVolumeLevel = (msg.playVolumeLevel!=undefined?msg.playVolumeLevel:deviceDefaultSettings.playVolumeLevel);
-    devicePlaySettings.playVolumeLevel /=100;
-    devicePlaySettings.playMessage = (msg.playMessage!=undefined?msg.playMessage:"");
-    devicePlaySettings.language = (msg.language!=undefined?msg.language:deviceDefaultSettings.language);
-    devicePlaySettings.speakSlow = (msg.speakSlow!=undefined?msg.speakSlow:deviceDefaultSettings.speakSlow);
-    devicePlaySettings.mediaServerUrl = (msg.mediaServerUrl!=undefined?msg.mediaServerUrl:deviceDefaultSettings.mediaServerUrl);
-    devicePlaySettings.mediaServerPort = (msg.mediaServerPort!=undefined?msg.mediaServerPort:deviceDefaultSettings.mediaServerPort);
-    devicePlaySettings.cacheFolder = (msg.cacheFolder!=undefined?msg.cacheFolder:deviceDefaultSettings.cacheFolder);
+    devicePlaySettings.playVolumeLevel = (msg.playVolumeLevel != undefined ? msg.playVolumeLevel : deviceDefaultSettings.playVolumeLevel);
+    devicePlaySettings.playVolumeLevel /= 100;
+    devicePlaySettings.playMessage = (msg.playMessage != undefined ? msg.playMessage : "");
+    devicePlaySettings.language = (msg.language != undefined ? msg.language : deviceDefaultSettings.language);
+    devicePlaySettings.speakSlow = (msg.speakSlow != undefined ? msg.speakSlow : deviceDefaultSettings.speakSlow);
+    devicePlaySettings.mediaServerUrl = (msg.mediaServerUrl != undefined ? msg.mediaServerUrl : deviceDefaultSettings.mediaServerUrl);
+    devicePlaySettings.mediaServerPort = (msg.mediaServerPort != undefined ? msg.mediaServerPort : deviceDefaultSettings.mediaServerPort);
+    devicePlaySettings.cacheFolder = (msg.cacheFolder != undefined ? msg.cacheFolder : deviceDefaultSettings.cacheFolder);
+    
+    // if(msg.abortAll){
+    //   notificationsQueue = [];
+      
+    //   isPlayingNotifiation=false;
+
+    // }
+    notificationsQueue.push({
+      'devicePlaySettings': devicePlaySettings,
+      'callback': callback
+    });
+
+    if (!isPlayingNotifiation) {
+      isPlayingNotifiation = true;
+      runNotificationFromQueue();
+    }
+
+  };
+
+
+
+  function runNotificationFromQueue() {
+    if (notificationsQueue.length) {
+      const pendingNotification = notificationsQueue.pop();
+      runNotification(pendingNotification.devicePlaySettings)
+        .then(devicePlaySettings => {
+          pendingNotification.callback(null, devicePlaySettings);
+          runNotificationFromQueue();
+        })
+        .catch(err=>
+          pendingNotification.callback(err,pendingNotification.devicePlaySettings)
+          );
+    }
+  }
+
+  function runNotification(devicePlaySettings) {
     return getSpeechUrl(devicePlaySettings)
       .then(devicePlaySettings =>
         playOnDevice(devicePlaySettings));
-  };
+  }
 
   // this.play = function (mp3_url, callback) {
   //   getPlayUrl(mp3_url, deviceIp, function (res) {
@@ -76,7 +114,6 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     return new Promise((resolve, reject) => {
       devicePlaySettings.defaultMediaReceiver = require('castv2-client').DefaultMediaReceiver;
       devicePlaySettings.device = new castV2();
-
       devicePlaySettings.device.on('error', function (err) {
         console.log('Error: %s', err.message);
         devicePlaySettings.device.close();
@@ -93,41 +130,41 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function getSpeechUrl(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      if(devicePlaySettings.msg.hasOwnProperty('url')){
+      if (devicePlaySettings.msg.hasOwnProperty('url')) {
         resolve(devicePlaySettings);
         return;
       }
       if (devicePlaySettings.cacheFolder == undefined) {
         reject("missing cache folder");
       }
-      if (devicePlaySettings.msg.hasOwnProperty('mediaFileName')){
+      if (devicePlaySettings.msg.hasOwnProperty('mediaFileName')) {
         devicePlaySettings.mediaPlayUrl = devicePlaySettings.mediaServerUrl
-        + (devicePlaySettings.mediaServerPort?":" + devicePlaySettings.mediaServerPort:'')
-        + "/" + devicePlaySettings.mediaFileName;
+          + (devicePlaySettings.mediaServerPort ? ":" + devicePlaySettings.mediaServerPort : '')
+          + "/" + devicePlaySettings.mediaFileName;
         resolve('devicePlaySettings');
         return;
       }
-      if (devicePlaySettings.msg.mediaUrl){
+      if (devicePlaySettings.msg.mediaUrl) {
         devicePlaySettings.mediaPlayUrl = devicePlaySettings.msg.mediaUrl;
         devicePlaySettings.mediaType = devicePlaySettings.msg.mediaType;
         resolve('devicePlaySettings');
         return;
       }
 
-      if (!devicePlaySettings.playMessage){
+      if (!devicePlaySettings.playMessage) {
         reject('missing message to play');
         return;
       }
       const cleanedMessage = devicePlaySettings.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
-      devicePlaySettings.mediaFileName = cleanedMessage + "-" 
-        + devicePlaySettings.language + "-" 
-        + (devicePlaySettings.speakSlow ? "slow" : "normal") 
+      devicePlaySettings.mediaFileName = cleanedMessage + "-"
+        + devicePlaySettings.language + "-"
+        + (devicePlaySettings.speakSlow ? "slow" : "normal")
         + ".mp3";
       let fileToCheckInCache = path.join(devicePlaySettings.cacheFolder, devicePlaySettings.mediaFileName);
       devicePlaySettings.mediaPlayUrl = devicePlaySettings.mediaServerUrl
         + ":" + devicePlaySettings.mediaServerPort
         + "/" + devicePlaySettings.mediaFileName;
-      
+
       if (fs.existsSync(fileToCheckInCache)) {
         resolve(devicePlaySettings);
 
@@ -201,7 +238,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function memoriseCurrentDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      if(isPlayingNotifiation){
+      if (isPlayingNotifiation) {
         resolve(devicePlaySettings); // do not memorize volume because already playing, thus not the device inital volume level setting
       }
       devicePlaySettings.device.getVolume((err, volume) => {
@@ -219,8 +256,8 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
           reject(err);
         console.log("Vol level restored to ", devicePlaySettings.memoVolume.level, "device ", devicePlaySettings.ip);
         devicePlaySettings.device.close();
-        devicePlaySettings.defaultMediaReceiver=null;
-        isPlayingNotifiation=false;
+        devicePlaySettings.defaultMediaReceiver = null;
+        isPlayingNotifiation = false;
         resolve(devicePlaySettings);
       });
     });
@@ -254,13 +291,13 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
       var media = {
         contentId: devicePlaySettings.mediaPlayUrl,
-        contentType: (devicePlaySettings.mediaType?devicePlaySettings.mediaType:'audio/mp3'),
-        streamType: (devicePlaySettings.msg.streamType?devicePlaySettings.msg.streamType:'BUFFERED') // or LIVE
+        contentType: (devicePlaySettings.mediaType ? devicePlaySettings.mediaType : 'audio/mp3'),
+        streamType: (devicePlaySettings.msg.streamType ? devicePlaySettings.msg.streamType : 'BUFFERED') // or LIVE
       };
 
       console.log('mediaPlayUrl: ' + devicePlaySettings.mediaPlayUrl);
 
-      isPlayingNotifiation=true;
+
       devicePlaySettings.player.load(media, {
         autoplay: true
       }, function (err, status) {
