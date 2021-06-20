@@ -3,6 +3,7 @@
 ### Releases:
 | Version   |Comment|
 | ----------|:-------------:|
+| 1.3.0     | notifications queueing / priority and stop playing  
 | 1.2.1     | play media url as notification
 | 1.1.0     | user overridable media server url
 | 1.0.0     | Initial  release
