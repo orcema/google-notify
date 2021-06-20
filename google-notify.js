@@ -18,8 +18,6 @@ const path = require('path');
 var notificationsQueue = [];
 var processQueueItemTimout;
 
-
-
 function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
   var notificationsPipeLine = [];
   var isPlayingNotifiation = false;
@@ -34,9 +32,6 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     "cacheFolder": cacheFolder,
     "playVolumeLevel": defaultVolumeLevel
   };
-
-
-  ;
 
   this.stopPlaying = function (msg) {
     msg.sourceNode.node_status_ready();
@@ -60,7 +55,8 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       .then(devicePlaySettings =>
         restoreDeviceVolume(devicePlaySettings))
 
-  }
+  };
+
   this.notify = function (msg, callback) {
     const devicePlaySettings = {};
     devicePlaySettings.msg = msg;
@@ -80,18 +76,23 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         'devicePlaySettings': devicePlaySettings,
         'callback': callback
       });
+      notificationsQueue.forEach(notification => {
+        notification.devicePlaySettings.msg.sourceNode.node_status("queued for device ready");
+      })
+
       if (processQueueItemTimout) {
         return;
       }
       processQueueItemTimout = setTimeout(() => {
         runNotificationFromQueue();
-      }, 1000);
+      }, 10);
 
     } else {
       notificationsQueue.push({
         'devicePlaySettings': devicePlaySettings,
         'callback': callback
       });
+      devicePlaySettings.msg.sourceNode.node_status("queued for device ready");
     }
 
     if (!isPlayingNotifiation) {
@@ -101,7 +102,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       }
       processQueueItemTimout = setTimeout(() => {
         runNotificationFromQueue();
-      }, 1000);
+      }, 10);
     }
 
   };
@@ -121,14 +122,14 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         }
         );
     }
-  }
+  };
 
   function runNotification(devicePlaySettings) {
     return getSpeechUrl(devicePlaySettings)
       .then(devicePlaySettings =>
         playOnDevice(devicePlaySettings))
       .then(processQueueItemTimout = undefined);
-  }
+  };
 
   // this.play = function (mp3_url, callback) {
   //   getPlayUrl(mp3_url, deviceIp, function (res) {
@@ -176,10 +177,11 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       resolve(devicePlaySettings);
     });
 
-  }
+  };
 
   function getSpeechUrl(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      devicePlaySettings.msg.sourceNode.node_status("preparing voice message");
       if (devicePlaySettings.msg.hasOwnProperty('url')) {
         resolve(devicePlaySettings);
         return;
@@ -257,14 +259,14 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         const buffer = Buffer.from(base64, 'base64');
         fs.writeFileSync(dstFilePath, buffer, { encoding: 'base64' });
       })
-  }
+  };
 
   function createFolderIfNotExist(folderToAssert) {
     if (!fs.existsSync(folderToAssert)) {
       fs.mkdirSync(folderToAssert);
     }
     return folderToAssert;
-  }
+  };
 
   function setupSocket(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -276,7 +278,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function connectWithDevice(devicePlaySettings, deviceIp) {
     return new Promise((resolve, reject) => {
@@ -284,7 +286,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function memoriseCurrentDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -297,11 +299,11 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function restoreDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
-      if (deviceDefaultSettings.memoVolume==undefined){
+      if (deviceDefaultSettings.memoVolume == undefined) {
         resolve(devicePlaySettings)
         return;
       }
@@ -315,7 +317,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function setDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -326,7 +328,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function setupPlayer(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -337,7 +339,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings);
       });
     });
-  }
+  };
 
   function playMedia(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -387,7 +389,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
 
     });
-  }
+  };
 
   function stopPlaying(devicePlaySettings) {
     return new Promise((resolve, reject) => {
@@ -402,7 +404,14 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       })
 
     });
-  }
+  };
+
+  function clearMessageQueue() {
+    notificationsQueue.forEach(notification => {
+      notification.devicePlaySettings.msg.sourceNode.node_status_ready();
+    })
+    notificationsQueue = [];
+  };
 
 };
 
@@ -414,12 +423,4 @@ module.exports = function (deviceip, language, speakSlow, mediaServerUrl, mediaS
 }
 
 
-
-
-function clearMessageQueue() {
-  notificationsQueue.forEach(notification=>{
-    notification.devicePlaySettings.msg.sourceNode.node_status_ready();
-  })
-  notificationsQueue = [];
-}
 
