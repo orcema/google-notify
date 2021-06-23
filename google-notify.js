@@ -15,10 +15,11 @@ const Googletts = require('google-tts-api');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
-var notificationsQueue = [];
-var processQueueItemTimout;
+
 
 function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+  var notificationsQueue = [];
+  var processQueueItemTimout;
   var notificationsPipeLine = [];
   var isPlayingNotifiation = false;
   const emitter = this;
