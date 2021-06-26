@@ -368,7 +368,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
           }
         });
 
-        devicePlaySettings.sourceNode.node_status('playing voice message');
+        devicePlaySettings.sourceNode.node_status('playing ' + devicePlaySettings.mediaPlayUrl.split('/').pop());
 
         devicePlaySettings.player.on('status', function (status) {
           var currentPlayerState = status.playerState;
