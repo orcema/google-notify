@@ -72,58 +72,70 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     devicePlaySettings.mediaServerPort = (msg.mediaServerPort != undefined ? msg.mediaServerPort : deviceDefaultSettings.mediaServerPort);
     devicePlaySettings.cacheFolder = (msg.cacheFolder != undefined ? msg.cacheFolder : deviceDefaultSettings.cacheFolder);
 
+    if(msg.clearPending){
+      notificationsQueue.forEach(notification => {
+        notification.devicePlaySettings.msg.sourceNode.node_status_ready();
+        console.log('Queued messages', notificationsQueue);
+      });
+      notificationsQueue = [];
+    }
+
     if (msg.important) {
       notificationsQueue.unshift({
         'devicePlaySettings': devicePlaySettings,
         'callback': callback
       });
-      notificationsQueue.forEach(notification => {
-        notification.devicePlaySettings.msg.sourceNode.node_status("queued for device ready");
-      })
-
-      if (processQueueItemTimout) {
-        return;
-      }
-      processQueueItemTimout = setTimeout(() => {
-        runNotificationFromQueue();
-      }, 10);
-
     } else {
       notificationsQueue.push({
         'devicePlaySettings': devicePlaySettings,
         'callback': callback
       });
-      devicePlaySettings.msg.sourceNode.node_status("queued for device ready");
     }
+    updateNodeStatusAboutNbrPendingNotifications();
 
-    if (!isPlayingNotifiation) {
-      isPlayingNotifiation = true;
-      if (processQueueItemTimout) {
-        return;
-      }
-      processQueueItemTimout = setTimeout(() => {
-        runNotificationFromQueue();
-      }, 10);
-    }
+    runNotificationFromQueue(msg.important);
 
   };
 
-  function runNotificationFromQueue() {
+  function runNotificationFromQueue(important) {
+    if (isPlayingNotifiation && !important) {
+      return;
+    }
+    if (processQueueItemTimout) {
+      return;
+    }
     if (notificationsQueue.length) {
-      const pendingNotification = notificationsQueue[0];
-      runNotification(pendingNotification.devicePlaySettings)
-        .then(devicePlaySettings => {
-          pendingNotification.callback(null, devicePlaySettings);
-          notificationsQueue.shift();
-          runNotificationFromQueue();
-        })
-        .catch(err => {
-          notificationsQueue.pop();
-          pendingNotification.callback(err, pendingNotification.devicePlaySettings);
-        }
-        );
+      isPlayingNotifiation = true;
+      processQueueItemTimout = setTimeout(() => {
+        const processingNotification = notificationsQueue[0];
+        updateNodeStatusAboutNbrPendingNotifications();
+        runNotification(processingNotification.devicePlaySettings)
+          .then(devicePlaySettings => {
+            notificationsQueue = notificationsQueue.filter(notification => notification != processingNotification);
+            processingNotification.callback(null, devicePlaySettings);
+            processQueueItemTimout = undefined;
+            runNotificationFromQueue();
+          })
+          .catch(err => {
+            if (err != "Load cancelled") {
+              notificationsQueue.shift();
+              processingNotification.callback(err, processingNotification.devicePlaySettings);
+            }
+          }
+          );
+
+      }, 1000);
+
+
     }
   };
+
+  function updateNodeStatusAboutNbrPendingNotifications() {
+    notificationsQueue.forEach(notification => {
+      notification.devicePlaySettings.msg.sourceNode.node_status(notificationsQueue.length + " messages queued for device ready");
+      console.log('Queued messages', notificationsQueue);
+    });
+  }
 
   function runNotification(devicePlaySettings) {
     return getSpeechUrl(devicePlaySettings)
@@ -147,13 +159,16 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         connectWithDevice(devicePlaySettings, deviceIp))
 
       .then(devicePlaySettings =>
+        setupPlayer(devicePlaySettings))
+
+      .then(devicePlaySettings =>
+        stopPlaying(devicePlaySettings))
+
+      .then(devicePlaySettings =>
         memoriseCurrentDeviceVolume(devicePlaySettings))
 
       .then(devicePlaySettings =>
         setDeviceVolume(devicePlaySettings))
-
-      .then(devicePlaySettings =>
-        setupPlayer(devicePlaySettings))
 
       .then(devicePlaySettings =>
         playMedia(devicePlaySettings))
@@ -183,6 +198,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
   function getSpeechUrl(devicePlaySettings) {
     return new Promise((resolve, reject) => {
       devicePlaySettings.msg.sourceNode.node_status("preparing voice message");
+      console.log('setting up mediaPlayUrl');
       if (devicePlaySettings.msg.hasOwnProperty('url')) {
         resolve(devicePlaySettings);
         return;
@@ -271,6 +287,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function setupSocket(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      console.log('preparing socket for connection to device');
       devicePlaySettings.clienttcp = new net.Socket();
       devicePlaySettings.clienttcp.on('error', function (error) {
         reject('ERROR: Device not reachable');
@@ -283,6 +300,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function connectWithDevice(devicePlaySettings, deviceIp) {
     return new Promise((resolve, reject) => {
+      console.log('connecting with device');
       devicePlaySettings.device.connect(deviceIp, () => {
         resolve(devicePlaySettings);
       });
@@ -308,12 +326,15 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         resolve(devicePlaySettings)
         return;
       }
+      console.log('preparing to restore device inital volume level');
       devicePlaySettings.device.setVolume({ level: deviceDefaultSettings.memoVolume.level }, (err, response) => {
         if (err)
           reject(err);
         console.log("Vol level restored to ", deviceDefaultSettings.memoVolume.level, "device ", devicePlaySettings.ip);
         devicePlaySettings.device.close();
         devicePlaySettings.defaultMediaReceiver = null;
+        devicePlaySettings.clienttcp.destroy();
+        devicePlaySettings.clienttcp = undefined;
         isPlayingNotifiation = false;
         resolve(devicePlaySettings);
       });
@@ -333,6 +354,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function setupPlayer(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      console.log('preparing player on device');
       devicePlaySettings.device.launch(devicePlaySettings.defaultMediaReceiver, function (err, player) {
         if (err)
           reject(error);
@@ -344,64 +366,66 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
 
   function playMedia(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      console.log('preparing to play media');
       let previousPlayerState;
-      devicePlaySettings.player.getStatus(status => {
-        if (status) {
-          console.log('stopping current play', status);
-          devicePlaySettings.player.stop();
-        }
 
-        var media = {
-          contentId: devicePlaySettings.mediaPlayUrl,
-          contentType: (devicePlaySettings.mediaType ? devicePlaySettings.mediaType : 'audio/mp3'),
-          streamType: (devicePlaySettings.msg.streamType ? devicePlaySettings.msg.streamType : 'BUFFERED') // or LIVE
-        };
+      var media = {
+        contentId: devicePlaySettings.mediaPlayUrl,
+        contentType: (devicePlaySettings.mediaType ? devicePlaySettings.mediaType : 'audio/mp3'),
+        streamType: (devicePlaySettings.msg.streamType ? devicePlaySettings.msg.streamType : 'BUFFERED') // or LIVE
+      };
 
-        console.log('mediaPlayUrl: ' + devicePlaySettings.mediaPlayUrl);
+      console.log('mediaPlayUrl: ' + devicePlaySettings.mediaPlayUrl);
 
-        devicePlaySettings.player.load(media, {
-          autoplay: true
-        }, function (err, status) {
-          if (err) {
-            console.error('media ' + devicePlaySettings.mediaPlayUrl + ' not available', err);
+      devicePlaySettings.player.load(media, {
+        autoplay: true
+      }, function (err, status) {
+        if (err) {
+          console.error('media ' + devicePlaySettings.mediaPlayUrl + ' not available', err);
+          if (err.message == "Load cancelled") {
+            reject(err.message);
+          } else {
             reject("failed to load media, check media server in config");
           }
-        });
 
-        devicePlaySettings.sourceNode.node_status('playing ' + devicePlaySettings.mediaPlayUrl.split('/').pop());
+        }
+      });
 
-        devicePlaySettings.player.on('status', function (status) {
-          var currentPlayerState = status.playerState;
-          console.log('status broadcast currentPlayerState=%s', currentPlayerState, "for host", devicePlaySettings.ip);
+      devicePlaySettings.sourceNode.node_status('playing ' + devicePlaySettings.mediaPlayUrl.split('/').pop());
 
-          if (currentPlayerState === "PAUSED") {
-            resolve(devicePlaySettings);
-          }
+      devicePlaySettings.player.on('status', function (status) {
+        var currentPlayerState = status.playerState;
+        console.log('status broadcast currentPlayerState=%s', currentPlayerState, "for host", devicePlaySettings.ip);
 
-          const finishedPlaying = (previousPlayerState === "PLAYING" || previousPlayerState === "BUFFERING") && currentPlayerState === "IDLE";
-          if (finishedPlaying) {
-            resolve(devicePlaySettings);
-          }
+        if (currentPlayerState === "PAUSED") {
+          resolve(devicePlaySettings);
+        }
 
-          previousPlayerState = currentPlayerState;
+        const finishedPlaying = (previousPlayerState === "PLAYING" || previousPlayerState === "BUFFERING") && currentPlayerState === "IDLE";
+        if (finishedPlaying) {
+          resolve(devicePlaySettings);
+        }
 
-        });
-      })
+        previousPlayerState = currentPlayerState;
 
-
+      });
     });
+
   };
 
   function stopPlaying(devicePlaySettings) {
     return new Promise((resolve, reject) => {
+      console.log('preparing to stop any playing media');
       let previousPlayerState;
       devicePlaySettings.player.getStatus(status => {
         if (status) {
           console.log('stopping current play', status);
           devicePlaySettings.player.stop();
-
+          resolve(devicePlaySettings);
+        } else {
+          resolve(devicePlaySettings);
         }
-        resolve(devicePlaySettings);
+
       })
 
     });
