@@ -224,7 +224,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         reject('missing message to play');
         return;
       }
-      const cleanedMessage = devicePlaySettings.playMessage.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
+      const cleanedMessage = devicePlaySettings.playMessage.replace(/[<>:"\/\\|?* ]+/g, "_").toUpperCase();
       devicePlaySettings.mediaFileName = cleanedMessage + "-"
         + devicePlaySettings.language + "-"
         + (devicePlaySettings.speakSlow ? "slow" : "normal")
@@ -232,7 +232,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       let fileToCheckInCache = path.join(devicePlaySettings.cacheFolder, devicePlaySettings.mediaFileName);
       devicePlaySettings.mediaPlayUrl = devicePlaySettings.mediaServerUrl
         + ":" + devicePlaySettings.mediaServerPort
-        + "/" + devicePlaySettings.mediaFileName;
+        + "/" + encodeURI(devicePlaySettings.mediaFileName);
 
       if (fs.existsSync(fileToCheckInCache)) {
         resolve(devicePlaySettings);
