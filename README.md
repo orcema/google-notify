@@ -3,6 +3,7 @@
 ### Releases:
 | Version   |Comment|
 | ----------|:-------------:|
+| 1.4.5     | fix for queue filling up with pending notifications after error
 | 1.4.3     | new feature to clear all queues with pending notification & optimisations in pending messages management
 | 1.4.0     | fix name space issue for queueing variable 
 | 1.3.0     | notifications queueing / priority and stop playing  
