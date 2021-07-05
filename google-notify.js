@@ -72,7 +72,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     devicePlaySettings.mediaServerPort = (msg.mediaServerPort != undefined ? msg.mediaServerPort : deviceDefaultSettings.mediaServerPort);
     devicePlaySettings.cacheFolder = (msg.cacheFolder != undefined ? msg.cacheFolder : deviceDefaultSettings.cacheFolder);
 
-    if(msg.clearPending){
+    if (msg.clearPending) {
       notificationsQueue.forEach(notification => {
         notification.devicePlaySettings.msg.sourceNode.node_status_ready();
         console.log('Queued messages', notificationsQueue);
@@ -184,6 +184,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       devicePlaySettings.device.on('error', function (err) {
         console.log('Error: %s', err.message);
         devicePlaySettings.device.close();
+        isPlayingNotifiation = false;
         reject('error setup device communication adapter');
       });
 
@@ -204,6 +205,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         return;
       }
       if (devicePlaySettings.cacheFolder == undefined) {
+        isPlayingNotifiation = false;
         reject("missing cache folder");
       }
       if (devicePlaySettings.msg.hasOwnProperty('mediaFileName')) {
@@ -221,6 +223,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       }
 
       if (!devicePlaySettings.playMessage) {
+        isPlayingNotifiation = false;
         reject('missing message to play');
         return;
       }
@@ -248,6 +251,7 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
             resolve(devicePlaySettings))
           .catch(e => {
             console.error(e);
+            isPlayingNotifiation = false;
             reject('failed to create the voice message');
           })
           ;
@@ -328,8 +332,10 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       }
       console.log('preparing to restore device inital volume level');
       devicePlaySettings.device.setVolume({ level: deviceDefaultSettings.memoVolume.level }, (err, response) => {
-        if (err)
-          reject(err);
+        if (err) {
+          isPlayingNotifiation = false;
+          reject(err)
+        };
         console.log("Vol level restored to ", deviceDefaultSettings.memoVolume.level, "device ", devicePlaySettings.ip);
         devicePlaySettings.device.close();
         devicePlaySettings.defaultMediaReceiver = null;
@@ -344,8 +350,10 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
   function setDeviceVolume(devicePlaySettings) {
     return new Promise((resolve, reject) => {
       devicePlaySettings.device.setVolume({ level: devicePlaySettings.playVolumeLevel }, (err, response) => {
-        if (err)
-          reject(err);
+        if (err) {
+          isPlayingNotifiation = false;
+          reject(err)
+        };;
         console.log("Vol level set to ", devicePlaySettings.playVolumeLevel, "device ", devicePlaySettings.ip);
         resolve(devicePlaySettings);
       });
@@ -356,8 +364,10 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
     return new Promise((resolve, reject) => {
       console.log('preparing player on device');
       devicePlaySettings.device.launch(devicePlaySettings.defaultMediaReceiver, function (err, player) {
-        if (err)
+        if (err) {
+          isPlayingNotifiation = false;
           reject(error);
+        }
         devicePlaySettings.player = player;
         resolve(devicePlaySettings);
       });
@@ -383,15 +393,17 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
         if (err) {
           console.error('media ' + devicePlaySettings.mediaPlayUrl + ' not available', err);
           if (err.message == "Load cancelled") {
+            isPlayingNotifiation=false;
             reject(err.message);
           } else {
+            isPlayingNotifiation=false;
             reject("failed to load media, check media server in config");
           }
 
         }
       });
 
-      devicePlaySettings.sourceNode.node_status('playing ' + devicePlaySettings.mediaPlayUrl.split('/').pop());
+      devicePlaySettings.sourceNode.node_status('playing ' + decodeURI(devicePlaySettings.mediaPlayUrl).split('/').pop());
 
       devicePlaySettings.player.on('status', function (status) {
         var currentPlayerState = status.playerState;
