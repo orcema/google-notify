@@ -3,6 +3,7 @@
 ### Releases:
 | Version   |Comment|
 | ----------|:-------------:|
+| 1.4.7     | fix null pointer exception
 | 1.4.6     | fix for queue filling up with pending notifications after error and fix for internationalisation
 | 1.4.3     | new feature to clear all queues with pending notification & optimisations in pending messages management
 | 1.4.0     | fix name space issue for queueing variable 
