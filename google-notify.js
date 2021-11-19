@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 
 
-function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {
+function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServerPort, cacheFolder, defaultVolumeLevel) {  
   var notificationsQueue = [];
   var processQueueItemTimout;
   var notificationsPipeLine = [];
@@ -183,7 +183,9 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
       devicePlaySettings.device = new castV2();
       devicePlaySettings.device.on('error', function (err) {
         console.log('Error: %s', err.message);
-        devicePlaySettings.device.close();
+        if (null != devicePlaySettings.device){
+          devicePlaySettings.device.close();
+        }
         isPlayingNotifiation = false;
         reject('error setup device communication adapter');
       });
@@ -337,7 +339,9 @@ function GoogleNotify(deviceIp, language, speakSlow, mediaServerUrl, mediaServer
           reject(err)
         };
         console.log("Vol level restored to ", deviceDefaultSettings.memoVolume.level, "device ", devicePlaySettings.ip);
-        devicePlaySettings.device.close();
+        if (null != devicePlaySettings.device){
+          devicePlaySettings.device.close();
+        }
         devicePlaySettings.defaultMediaReceiver = null;
         devicePlaySettings.clienttcp.destroy();
         devicePlaySettings.clienttcp = undefined;
